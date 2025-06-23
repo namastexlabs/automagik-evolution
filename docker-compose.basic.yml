@@ -1,0 +1,74 @@
+services:
+  redis:
+    image: redis:7
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - evolution_network
+
+  rabbitmq:
+    image: rabbitmq:management
+    container_name: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-evolution}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-evolution123}
+    ports:
+      - "5672:5672"    # AMQP protocol
+      - "15672:15672"  # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - evolution_network
+
+  postgres:
+    image: postgres:15
+    container_name: postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-evolution_db}
+      POSTGRES_USER: ${POSTGRES_USER:-evolution_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-evolution123}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    command: postgres -c max_connections=200
+    networks:
+      - evolution_network
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-evolution_user} -d ${POSTGRES_DB:-evolution_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  evolution-api:
+    image: atendai/evolution-api:latest
+    container_name: evolution_api
+    restart: always
+    ports:
+      - "${SERVER_PORT:-18080}:${SERVER_PORT:-18080}"
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      rabbitmq:
+        condition: service_started
+    volumes:
+      - evolution_instances:/evolution/instances
+    networks:
+      - evolution_network
+
+volumes:
+  postgres_data:
+  redis_data:
+  rabbitmq_data:
+  evolution_instances:
+
+networks:
+  evolution_network:
+    driver: bridge
