@@ -13,8 +13,8 @@ services:
     image: rabbitmq:management
     container_name: rabbitmq
     environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-evolution}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-evolution123}
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-namastex}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-namastex8888}
     ports:    
       - "5672:5672"    # AMQP protocol
       - "15672:15672"  # Management UI
@@ -22,6 +22,12 @@ services:
       - rabbitmq_data:/var/lib/rabbitmq
     networks:
       - evolution_network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   postgres:
     image: postgres:15
@@ -29,7 +35,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-evolution_db}
       POSTGRES_USER: ${POSTGRES_USER:-evolution_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-evolution123}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-namastex8888}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     command: postgres -c max_connections=200
@@ -45,12 +51,12 @@ services:
 
   # MinIO for S3-compatible object storage
   minio:
-    image: minio/minio:latest
+    image: quay.io/minio/minio
     container_name: minio
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin123}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minio_access}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-namastex8888}
     ports:
       - "9000:9000"   # MinIO API
       - "9001:9001"   # MinIO Console
@@ -58,36 +64,33 @@ services:
       - minio_data:/data
     networks:
       - evolution_network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 30s
-      timeout: 20s
-      retries: 3
 
   # Audio Transcription Service
-  transcribe:
-    image: openai/whisper:latest
-    container_name: transcribe
-    environment:
-      - WHISPER_MODEL=base
-      - WHISPER_LANGUAGE=auto
-    volumes:
-      - transcribe_temp:/tmp/transcribe
+  api:
+    container_name: evolution_audio_converter
+    image: atendai/evolution-audio-converter:latest
+    restart: always
+    ports:
+      - 4040:4040
     networks:
       - evolution_network
-    # Note: This is a placeholder. You'll need to implement or use an actual transcription API
-    # Consider using services like:
-    # - OpenAI Whisper API
-    # - Google Speech-to-Text
-    # - AWS Transcribe
-    # - Local Whisper implementation
+    environment:
+      - PORT=4040
+      - API_KEY=namastex8888
+      - ENABLE_TRANSCRIPTION=true
+      - TRANSCRIPTION_PROVIDER=openai
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - TRANSCRIPTION_LANGUAGE=pt
+    expose:
+      - 4040
 
   evolution-api:
-    image: atendai/evolution-api:latest
+    image: evoapicloud/evolution-api:v2.3.0
     container_name: evolution_api
     restart: always
     ports:
-      - "${SERVER_PORT:-18080}:${SERVER_PORT:-18080}"
+      - "${SERVER_PORT:-8080}:8080"
     env_file:
       - .env
     depends_on:
@@ -96,21 +99,35 @@ services:
       redis:
         condition: service_started
       rabbitmq:
-        condition: service_started
-      minio:
         condition: service_healthy
+      minio:
+        condition: service_started
     volumes:
       - evolution_instances:/evolution/instances
     networks:
       - evolution_network
 
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    networks:
+      - evolution_network
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@namastex.com
+      - PGADMIN_DEFAULT_PASSWORD=namastex8888
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    ports:
+      - "4000:80"
+    links:
+      - postgres
+
 volumes:
   postgres_data:
+  pgadmin_data:
   redis_data:
   rabbitmq_data:
   evolution_instances:
   minio_data:
-  transcribe_temp:
 
 networks:
   evolution_network:
