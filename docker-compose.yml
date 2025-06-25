@@ -8,6 +8,11 @@ services:
       - redis_data:/data
     networks:
       - evolution_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
   rabbitmq:
     image: rabbitmq:management
     container_name: rabbitmq
@@ -32,13 +37,13 @@ services:
     container_name: evolution_api
     restart: always
     ports:
-      - "${SERVER_PORT}:8080"
+      - "${SERVER_PORT}:${SERVER_PORT}"
     env_file:
       - .env
     depends_on:
-      redis:
-        condition: service_started
       rabbitmq:
+        condition: service_healthy
+      postgres:
         condition: service_healthy
     volumes:
       - evolution_instances:/evolution/instances
